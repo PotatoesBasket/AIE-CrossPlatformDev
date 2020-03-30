@@ -5,21 +5,28 @@ using UnityEngine.EventSystems;
 
 public class CamControl : MonoBehaviour
 {
-    public CharacterController focusPoint; //object camera follows to pan, zoom, and orbit horizontally
-    public Transform rotatePoint; //object camera follows to orbit vertically
+    GameManager manager;
 
-    PetManager petManager;
-    Vector3 totalMovement;
+    public CharacterController focusPoint; //!< Object camera follows to pan, zoom, and orbit horizontally.
+    public Transform rotatePoint; //!< Object camera follows to orbit vertically.
+    public LayerMask mask;
+
+    public float minVerticalOrbit; //!< Minimum up/down orbit amount.
+    public float maxVerticalOrbit; //!< Maximum up/down orbit amount.
+
+    Vector3 totalMovement; //!< Overall accumulated movement per frame.
 
     private void Start()
     {
-        petManager = GameObject.FindGameObjectWithTag("PetManager").GetComponent<PetManager>();
-        InitialiseCameraPosition();
+        InitComponents();
+        InitCameraPosition();
     }
 
     private void Update()
     {
         totalMovement = Vector3.zero;
+
+        DetectTouch();
 
         Pan(); //move camera left/right and up/down
         Zoom(); //move camera forward/back
@@ -31,9 +38,96 @@ public class CamControl : MonoBehaviour
 
         if (!isFocusing || !arrivedAtTarget)
             focusPoint.Move(totalMovement);
+    }
 
-        if (Input.GetKey(KeyCode.Escape))
-            Application.Quit();
+    //! Gets components needed for script
+    void InitComponents()
+    {
+        manager = GameManager.Instance;
+    }
+
+    //! Initializes orbit values to match editor
+    void InitCameraPosition()
+    {
+        totalOrbitX = focusPoint.transform.eulerAngles.y;
+        totalOrbitY = rotatePoint.eulerAngles.x + -360;
+    }
+
+    Touch touch1;
+    Touch touch2;
+
+    bool isTapping = false;
+    bool isDragging = false;
+    bool isPinching = false;
+
+    float tapTimer = 0.0f;
+    const float timeForDragDetect = 0.08f;
+    const float sqrDistForPinchDetect = 1500.0f;
+
+    Vector3 tapPosLastFrame;
+    Vector3 tapPos;
+    RaycastHit tapRayHit;
+
+    void DetectTouch()
+    {
+        if (Input.touchCount >= 1)
+            touch1 = Input.GetTouch(0);
+
+        if (Input.touchCount >= 2)
+            touch2 = Input.GetTouch(1);
+
+        if (!EventSystem.current.IsPointerOverGameObject())
+        {
+            if (Physics.Raycast(Camera.main.ScreenPointToRay(tapPos), out tapRayHit, 300, mask))
+            {
+                if (tapRayHit.transform.CompareTag("Money"))
+                {
+                    Destroy(tapRayHit.rigidbody.gameObject);
+                    manager.money += 100;
+                }
+            }
+
+            if (Input.GetMouseButtonDown(0))
+            {
+                isTapping = true;
+            }
+
+            if (Input.GetMouseButton(0))
+            {
+                tapTimer += Time.deltaTime;
+                tapPosLastFrame = tapPos;
+                tapPos = Input.mousePosition;
+
+                if (tapTimer > timeForDragDetect)
+                {
+                    isTapping = false;
+                    isDragging = true;
+                }
+            }
+
+            if (Input.GetMouseButtonUp(0) || touch1.phase == TouchPhase.Ended)
+            {
+                isTapping = false;
+                isDragging = false;
+                isPinching = false;
+                tapTimer = 0.0f;
+            }
+
+            // detect pinch gesture
+            if (touch1.phase == TouchPhase.Moved && touch2.phase == TouchPhase.Moved)
+            {
+                Vector2 touch1PrevPos = touch1.position - touch1.deltaPosition;
+                Vector2 touch2PrevPos = touch2.position - touch2.deltaPosition;
+
+                float prevMagnitudeSqr = (touch1PrevPos - touch2PrevPos).sqrMagnitude;
+                float currentMagnitudeSqr = (touch1.position - touch2.position).sqrMagnitude;
+
+                if (Mathf.Abs(currentMagnitudeSqr - prevMagnitudeSqr) > sqrDistForPinchDetect)
+                    isPinching = true;
+                else
+                    isPinching = false;
+            }
+        }
     }
 
     #region CAMERA USER CONTROLS
@@ -43,76 +137,101 @@ public class CamControl : MonoBehaviour
     ///////////////////////////
 
     public float panSpeed;
-    public float zoomSpeed;
-    public float orbitSpeed;
-
     Vector3 horizontalPan;
     Vector3 verticalPan;
-    Vector3 zoom;
-
-    float totalOrbitX = 0;
-    float totalOrbitY = 0;
-
-    void InitialiseCameraPosition()
-    {
-        //initialize orbit values to match editor
-        totalOrbitX = focusPoint.transform.eulerAngles.y;
-        totalOrbitY = rotatePoint.eulerAngles.x + -360;
-    }
 
     void Pan()
     {
-        //get all pan input methods
+        // get all pan input methods
         float inputX = Mathf.Clamp(Input.GetAxis("PanHorizontal"), -1, 1);
         float inputY = Mathf.Clamp(Input.GetAxis("PanVertical"), -1, 1);
 
-        //release from focus object
+        // release from focus object
         if ((inputX != 0 || inputY != 0) && isFocusing == true)
             isFocusing = false;
 
-        //calculate movement
+        // calculate movement
         horizontalPan = -focusPoint.transform.right * inputX * panSpeed * Time.deltaTime;
         verticalPan = focusPoint.transform.up * inputY * panSpeed * Time.deltaTime;
 
-        //add to total movement
+        // touch pan
+        if (isDragging == true && isPinching == false && touch2.phase == TouchPhase.Moved)
+        {
+            Vector3 direction = (tapPosLastFrame - tapPos).normalized;
+
+            //totalMovement += direction;
+            horizontalPan = -focusPoint.transform.right * direction.x * panSpeed * Time.deltaTime;
+            verticalPan = focusPoint.transform.up * direction.y * panSpeed * Time.deltaTime;
+        }
+
+        // add to total movement
         totalMovement += horizontalPan + verticalPan;
     }
 
+    public float zoomSpeed;
+    Vector3 zoom;
+
     void Zoom()
     {
-        //get all zoom input methods
-        float input = Mathf.Clamp(
+        float input;
+
+        // get keyboard/gamepad zoom input methods
+        input = Mathf.Clamp(
             Input.GetAxis("Zoom") +
             Input.GetAxis("ScrollWheel"), -1, 1);
 
-        //release from focus object
-        if (input != 0 && isFocusing == true)
+        // pinch gesture zoom input
+        if (isPinching && touch1.phase == TouchPhase.Moved && touch2.phase == TouchPhase.Moved)
+        {
+            Vector2 touch1PrevPos = touch1.position - touch1.deltaPosition;
+            Vector2 touch2PrevPos = touch2.position - touch2.deltaPosition;
+
+            float prevMagnitude = (touch1PrevPos - touch2PrevPos).magnitude;
+            float currentMagnitude = (touch1.position - touch2.position).magnitude;
+
+            input = -currentMagnitude - -prevMagnitude;
+        }
+
+        // release from focus object
+        if ((input != 0 || Input.touchCount == 2) && isFocusing == true)
             isFocusing = false;
 
-        //calculate movement
+        // calculate movement
         zoom = focusPoint.transform.forward * input * panSpeed * Time.deltaTime;
 
-        //add to total movement
+        // add to total movement
         totalMovement += zoom;
     }
 
+    public float orbitSpeed;
+    float totalOrbitX = 0.0f;
+    float totalOrbitY = 0.0f;
+
     void Orbit()
     {
-        //get orbit inputs
+        // get orbit inputs
         totalOrbitX += Input.GetAxis("OrbitHorizontal") * orbitSpeed * Time.deltaTime; // buttons/keys
         totalOrbitY += Input.GetAxis("OrbitVertical") * orbitSpeed * Time.deltaTime;
 
-        //rollover total horizontal orbit
+        if (isDragging && Input.touchCount != 2) // touch
+        {
+            Vector3 direction = (tapPosLastFrame - tapPos).normalized;
+
+            totalOrbitX += direction.x * orbitSpeed * Time.deltaTime;
+            totalOrbitY += direction.y * orbitSpeed * Time.deltaTime;
+        }
+
+        // rollover total horizontal orbit
         if (totalOrbitX > 360)
             totalOrbitX = 0;
         if (totalOrbitX < 0)
             totalOrbitX = 360;
 
-        //clamp total vertical orbit
-        totalOrbitY = Mathf.Clamp(totalOrbitY, -25, 7);
+        // clamp total vertical orbit
+        totalOrbitY = Mathf.Clamp(totalOrbitY, minVerticalOrbit, maxVerticalOrbit);
 
-        //set new focus point rotation
-        //it's seperate to not mess with panning and i'm lazy :V
+        // set new focus point rotation
+        // it's seperate to not mess with panning and i'm lazy :V
         focusPoint.transform.rotation = Quaternion.Euler(0, totalOrbitX, 0);
         rotatePoint.localRotation = Quaternion.Euler(totalOrbitY, 0, 0);
     }
@@ -128,69 +247,38 @@ public class CamControl : MonoBehaviour
     public float focusSpeed;
     public Vector3 focusHeightOffset;
 
-    float mouseTimer = 0.0f;
-    const float tapTimeLimit = 0.3f;
-    bool isTapping = false;
-    Vector3 tapPos = Vector3.zero;
-
     Transform focusObject = null;
     bool isFocusing = false;
     bool arrivedAtTarget = true;
 
-    public StatUI UIPanel;
+    Pet pet = null;
 
-    //detects if mouse/pressure input was a "tap"
-    //if so, locks camera onto target at tap position if available
+    // locks camera onto target at tap position if available
     void LookForFocusTarget()
     {
-        if (Input.GetMouseButton(0))
+        if (isTapping)
         {
-            isTapping = true;
-            mouseTimer += Time.deltaTime;
-            tapPos = Input.mousePosition;
-
-            if (mouseTimer > tapTimeLimit)
+            //tapped on valid focus object, lock on camera and open UI
+            if (tapRayHit.rigidbody != null && tapRayHit.rigidbody.CompareTag("Pet"))
             {
-                isTapping = false;
-            }
-        }
-        else if (isTapping == true)
-        {
-            if (Input.GetMouseButtonUp(0))
-            {
-                isTapping = false;
-                mouseTimer = 0.0f;
+                focusObject = tapRayHit.rigidbody.transform;
+                isFocusing = true;
+                arrivedAtTarget = false;
 
-                Physics.Raycast(Camera.main.ScreenPointToRay(tapPos), out RaycastHit hit);
-
-                //tapped on valid focus object, lock on camera and open UI
-                if (hit.rigidbody != null && hit.rigidbody.CompareTag("Pet"))
+                if (focusObject.TryGetComponent(out pet))
                 {
-                    focusObject = hit.rigidbody.transform;
-                    isFocusing = true;
-                    arrivedAtTarget = false;
-
-                    if (focusObject.TryGetComponent(out PetStatus pet))
-                    {
-                        petManager.currentPet = pet;
-                        UIPanel.SetPet(pet);
-                        UIPanel.gameObject.SetActive(true);
-                    }
-                }
-                //unfocus and close UI if not currently clicking on UI
-                else if (!EventSystem.current.IsPointerOverGameObject())
-                {
-                    focusObject = null;
-                    isFocusing = false;
-                    arrivedAtTarget = true;
-                    petManager.currentPet = null;
-                    UIPanel.gameObject.SetActive(false);
+                    manager.SetCurrentPet(pet);
                 }
             }
-        }
-        else
-        {
-            mouseTimer = 0.0f;
+            //unfocus and close UI if not currently clicking on UI
+            else if (!EventSystem.current.IsPointerOverGameObject())
+            {
+                focusObject = null;
+                isFocusing = false;
+                arrivedAtTarget = true;
+                manager.UnselectCurrentPet();
+                pet = null;
+            }
         }
     }
 
@@ -209,7 +297,7 @@ public class CamControl : MonoBehaviour
         }
     }
 
-    //camera follows focus object if already on it
+    // camera follows focus object if already on it
     void FollowFocusObject()
     {
         if (focusObject != null && isFocusing && arrivedAtTarget)

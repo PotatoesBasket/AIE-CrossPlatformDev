@@ -5,33 +5,33 @@ using UnityEngine.UI;
 
 public class StatUI : MonoBehaviour
 {
-    PetStatus currentPet;
+    public PetStatus currentPet;
 
     public Slider hungerBar;
     public Slider thirstBar;
-    public Slider hygieneBar;
-    public Slider funBar;
+    public Slider loveBar;
 
     public void SetPet(PetStatus pet) { currentPet = pet; }
 
+    //! Inits stat bars in HUD to be beginning values.
     private void Start()
     {
-        currentPet = GameObject.FindGameObjectWithTag("Pet").GetComponent<PetStatus>();
+        currentPet = GameManager.Instance.currentPet.GetComponent<PetStatus>();
 
         SetSliderValues(hungerBar, currentPet.Hunger);
         SetSliderValues(thirstBar, currentPet.Thirst);
-        SetSliderValues(hygieneBar, currentPet.Hygiene);
-        SetSliderValues(funBar, currentPet.Fun);
+        SetSliderValues(loveBar, currentPet.Love);
     }
 
+    //! Updates HUD stat bars.
     private void Update()
     {
         hungerBar.value = currentPet.Hunger.CurrentValue;
         thirstBar.value = currentPet.Thirst.CurrentValue;
-        hygieneBar.value = currentPet.Hygiene.CurrentValue;
-        funBar.value = currentPet.Fun.CurrentValue;
+        loveBar.value = currentPet.Love.CurrentValue;
     }
 
+    //! Sets single stat bar in HUD to beginning values.
     void SetSliderValues(Slider slider, Stat stat)
     {
         slider.minValue = stat.MinValue;

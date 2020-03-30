@@ -10,4 +10,5 @@ public class Stat
     public float Timer { get; set; }
 
     public Stat() { CurrentValue = MaxValue; }
+    public Stat(float value) { CurrentValue = value; }
 }

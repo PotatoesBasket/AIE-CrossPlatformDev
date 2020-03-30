@@ -4,61 +4,57 @@ using UnityEngine;
 
 public class PetStatus : MonoBehaviour
 {
-    string Name { get; set; }
+    GameManager manager;
 
     //health stats
-    public Stat Age = new Stat();
     public Stat Hunger = new Stat();
     public Stat Thirst = new Stat();
-    public Stat Hygiene = new Stat();
-    public Stat Energy = new Stat();
-    public Stat Fun = new Stat();
+    public Stat Love = new Stat(0);
 
-    //skill stats
-    public Stat Love = new Stat();
-    public Stat Tameness = new Stat();
-    public Stat Athleticism = new Stat();
-    public Stat Musical = new Stat();
-    public Stat Intelligence = new Stat();
-    public Stat Artistry = new Stat();
-    public Stat Empathy = new Stat();
+    private void Start()
+    {
+        manager = GameManager.Instance;
+    }
 
-    //Adds amount to stat without going outside of min/max range
+    private void Update()
+    {
+        NaturalShift(ref Hunger, 5, -3);
+        NaturalShift(ref Thirst, 3, -3);
+        NaturalShift(ref Love, 10, 5);
+        Die();
+    }
+
+    //! Adds amount to stat without going outside of min/max range.
     public void AddToStat(ref Stat stat, float amount)
     {
-        if (stat.CurrentValue + amount > stat.MaxValue)
+        if (stat.CurrentValue + amount >= stat.MaxValue)
             stat.CurrentValue = stat.MaxValue;
-        else if (stat.CurrentValue + amount < stat.MinValue)
+        else if (stat.CurrentValue + amount <= stat.MinValue)
             stat.CurrentValue = stat.MinValue;
         else
             stat.CurrentValue += amount;
     }
 
-    private void Update()
-    {
-        NaturalShift(ref Age, 60, 1);
-        NaturalShift(ref Hunger, 5, -3);
-        NaturalShift(ref Thirst, 3, -3);
-        NaturalShift(ref Hygiene, 10, -4);
-        NaturalShift(ref Energy, 7, -1);
-        NaturalShift(ref Fun, 10, -5);
-    }
-
-    /* Ajusts stat by amount when timer hits secInterval value */
+    /*! Adjusts stat by amount when timer hits secInterval value. */
     void NaturalShift(ref Stat stat, float secInterval, float amount)
     {
         stat.Timer += Time.deltaTime;
 
         if (stat.Timer >= secInterval)
         {
-            if (stat.CurrentValue + amount > stat.MaxValue)
-                stat.CurrentValue = stat.MaxValue;
-            else if (stat.CurrentValue + amount < stat.MinValue)
-                stat.CurrentValue = stat.MinValue;
-            else
-                stat.CurrentValue += amount;
-
+            AddToStat(ref stat, amount);
             stat.Timer = 0;
+        }
+    }
+
+    //! Checks if pet should be dead, destroys object and decrements total number of pets if yes.
+    void Die()
+    {
+        if (Hunger.CurrentValue <= Hunger.MinValue ||
+            Thirst.CurrentValue <= Thirst.MinValue)
+        {
+            --manager.noOfPets;
+            Destroy(gameObject);
         }
     }
 }
