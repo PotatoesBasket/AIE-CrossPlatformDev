@@ -75,13 +75,15 @@ public class PetAI : MonoBehaviour
     //! Travel to consumable action.
     void GoToConsumable()
     {
-        Physics.Raycast(transform.position, transform.forward, out RaycastHit hit, 5, mask);
-        Debug.DrawLine(transform.position, transform.position + transform.forward * 5, Color.red);
+        Debug.DrawLine(transform.position, transform.position + transform.forward * 2, Color.red);
 
-        if (hit.transform.gameObject.CompareTag("Food"))
+        if (Physics.Raycast(transform.position, transform.forward, out RaycastHit hit, 2, mask))
         {
-            goingToConsumable = false;
-            consuming = true;
+            if (hit.transform.gameObject.CompareTag("Food") || hit.transform.gameObject.CompareTag("Water"))
+            {
+                goingToConsumable = false;
+                consuming = true;
+            }
         }
         else
         {
@@ -93,24 +95,35 @@ public class PetAI : MonoBehaviour
     //! Eating action - fills stats, tells food it's being eaten.
     void Consume()
     {
-        Physics.Raycast(transform.position, transform.forward, out RaycastHit hit, 5, mask);
-        Debug.DrawLine(transform.position, transform.position + transform.forward * 5, Color.yellow);
+        Debug.DrawLine(transform.position, transform.position + transform.forward * 2, Color.yellow);
 
-        if (hit.transform.TryGetComponent(out Food food))
+        Food food = null;
+
+        if (Physics.Raycast(transform.position, transform.forward, out RaycastHit hit, 2, mask))
         {
-            food.IsBeingConsumed = true;
-            if (food.CompareTag("Food") && stats.Hunger.CurrentValue >= 99)
+            if (hit.transform.TryGetComponent(out food))
             {
-                stats.AddToStat(ref stats.Hunger, 20 * Time.deltaTime);
-            }
-            else if (food.CompareTag("Water") && stats.Thirst.CurrentValue >= 99)
-            {
-                stats.AddToStat(ref stats.Thirst, 20 * Time.deltaTime);
+                food.IsBeingConsumed = true;
+                if (food.CompareTag("Food") && stats.Hunger.CurrentValue <= 99)
+                {
+                    stats.AddToStat(ref stats.Hunger, 100);
+                }
+                else if (food.CompareTag("Water") && stats.Thirst.CurrentValue <= 99)
+                {
+                    stats.AddToStat(ref stats.Thirst, 100);
+                }
+                else
+                {
+                    consuming = false;
+                    food.IsBeingConsumed = false;
+                }
             }
         }
         else
         {
-            food.IsBeingConsumed = false;
+            if (food != null)
+                food.IsBeingConsumed = false;
+
             consuming = false;
         }
     }
@@ -166,14 +179,7 @@ public class PetAI : MonoBehaviour
     //! Check nearby items.
     private void OnTriggerStay(Collider other)
     {
-        Debug.Log(other.tag);
-
-        if (other.CompareTag("Water"))
-        {
-            Debug.Log("water detected");
-        }
-
-        if (stats.Thirst.CurrentValue < 75 && other.TryGetComponent(out Food water))
+        if (stats.Thirst.CurrentValue < 75 && other.transform.parent.TryGetComponent(out Food water))
         {
             Debug.Log("thirsty");
             if (water.CompareTag("Water"))
@@ -182,7 +188,7 @@ public class PetAI : MonoBehaviour
                 currentTarget = other.transform;
             }
         }
-        else if (stats.Hunger.CurrentValue < 55 && other.TryGetComponent(out Food food))
+        else if (stats.Hunger.CurrentValue < 55 && other.transform.parent.TryGetComponent(out Food food))
         {
             Debug.Log("hungry");
             if (food.CompareTag("Food"))

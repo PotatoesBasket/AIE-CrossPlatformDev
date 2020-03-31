@@ -11,7 +11,7 @@ public class Food : MonoBehaviour
     float currentScale; //!< Current overall scale of object.
 
     /*! If food is currently being consumed by something, shrink it until it reaches a minimum size,
-     then destroy it.*/
+     then destroy it. ...Well, that was supposed to be what happened, but it doesn't :V*/
     private void Update()
     {
         if (IsBeingConsumed)

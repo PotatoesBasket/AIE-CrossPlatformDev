@@ -176,9 +176,7 @@ public class CamControl : MonoBehaviour
         float input;
 
         // get keyboard/gamepad zoom input methods
-        input = Mathf.Clamp(
-            Input.GetAxis("Zoom") +
-            Input.GetAxis("ScrollWheel"), -1, 1);
+        input = Input.GetAxis("Zoom");
 
         // pinch gesture zoom input
         if (isPinching && touch1.phase == TouchPhase.Moved && touch2.phase == TouchPhase.Moved)

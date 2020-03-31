@@ -350,10 +350,10 @@ MonoBehaviour:
   maxSwitchTime: 5
   walkSpeed: 3
   runSpeed: 8
-  spawnPoint: {fileID: 2087584901}
   mask:
     serializedVersion: 2
     m_Bits: 512
+  spawnPoint: {fileID: 2087584901}
   gem: {fileID: 4275900643576564979, guid: 290cd7f5056a0764e94155f453ec77fc, type: 3}
 --- !u!114 &8248850868095923424
 MonoBehaviour:
@@ -377,11 +377,11 @@ Rigidbody:
   serializedVersion: 2
   m_Mass: 100
   m_Drag: 0
-  m_AngularDrag: 0.05
+  m_AngularDrag: 0
   m_UseGravity: 1
   m_IsKinematic: 0
   m_Interpolate: 0
-  m_Constraints: 80
+  m_Constraints: 0
   m_CollisionDetection: 0
 --- !u!65 &1623552256590612835
 BoxCollider:
